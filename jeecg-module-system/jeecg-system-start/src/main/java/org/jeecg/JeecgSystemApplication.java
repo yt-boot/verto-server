@@ -7,8 +7,6 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.mongo.MongoAutoConfiguration;
-import org.mybatis.spring.annotation.MapperScan;
-import org.springframework.context.annotation.ComponentScan;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -20,14 +18,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
-* µ¥ÌåÆô¶¯Àà£¨²ÉÓÃ´ËÀàÆô¶¯Îªµ¥ÌåÄ£Ê½£©
-* ±¨´íÌáĞÑ: Î´¼¯³Émongo±¨´í£¬¿ÉÒÔ´ò¿ªÆô¶¯ÀàÉÏÃæµÄ×¢ÊÍ exclude={MongoAutoConfiguration.class}
+* å•ä½“å¯åŠ¨ç±»ï¼ˆé‡‡ç”¨æ­¤ç±»å¯åŠ¨ä¸ºå•ä½“æ¨¡å¼ï¼‰
+* æŠ¥é”™æé†’: æœªé›†æˆmongoæŠ¥é”™ï¼Œå¯ä»¥æ‰“å¼€å¯åŠ¨ç±»ä¸Šé¢çš„æ³¨é‡Š exclude={MongoAutoConfiguration.class}
 */
 @Slf4j
-@SpringBootApplication(exclude = MongoAutoConfiguration.class)
-@ComponentScan(basePackages = {"org.jeecg", "com.verto"})
-@MapperScan("com.verto.modules.**.mapper")
-@ImportAutoConfiguration(JustAuthAutoConfiguration.class)  // spring boot 3.x justauth ¼æÈİĞÔ´¦Àí
+@SpringBootApplication(exclude = MongoAutoConfiguration.class, scanBasePackages = {"org.jeecg", "org.jeecgframework.boot3"})
+@ImportAutoConfiguration(JustAuthAutoConfiguration.class)  // spring boot 3.x justauth å…¼å®¹æ€§å¤„ç†
 public class JeecgSystemApplication extends SpringBootServletInitializer {
 
     @Override
@@ -42,7 +38,7 @@ public class JeecgSystemApplication extends SpringBootServletInitializer {
         app.setDefaultProperties(defaultProperties);
         log.info("[JEECG] Elasticsearch Health Check Enabled: false" );
         
-        ConfigurableApplicationContext application = app.run(args);
+        ConfigurableApplicationContext application = app.run(args);;
         Environment env = application.getEnvironment();
         String ip = InetAddress.getLocalHost().getHostAddress();
         String port = env.getProperty("server.port");
@@ -51,7 +47,7 @@ public class JeecgSystemApplication extends SpringBootServletInitializer {
                 "Application Jeecg-Boot is running! Access URLs:\n\t" +
                 "Local: \t\thttp://localhost:" + port + path + "\n\t" +
                 "External: \thttp://" + ip + ":" + port + path + "/doc.html\n\t" +
-                "SwaggerÎÄµµ: \thttp://" + ip + ":" + port + path + "/doc.html\n" +
+                "Swaggeræ–‡æ¡£: \thttp://" + ip + ":" + port + path + "/doc.html\n" +
                 "----------------------------------------------------------");
 
     }
