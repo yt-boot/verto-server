@@ -316,7 +316,7 @@ justauth:
     GITHUB:
       client-id: 5ce93933b273a9e19eb2
       client-secret: c76f8ae61597a59b32a6d8303f948a7af4c79f05
-      redirect-uri: http://localhost:8880/jeecg-boot/sys/thirdLogin/github/vertocallback
+      redirect-uri: http://localhost:8880/jeecg-boot/sys/thirdLoginVerto/github/vertocallback
       scope: read:user user:email repo
     WECHAT_ENTERPRISE:
       client-id: ??
@@ -342,12 +342,12 @@ verto:
     github:
       clientId: 5ce93933b273a9e19eb2
       clientSecret: c76f8ae61597a59b32a6d8303f948a7af4c79f05
-      redirectUri: http://localhost:8880/jeecg-boot/sys/thirdLogin/github/vertocallback
+      redirectUri: http://localhost:8880/jeecg-boot/sys/thirdLoginVerto/github/vertocallback
       scope: read:user user:email repo
     # GitLab 绑定配置（如需实际授权，请替换为你在 GitLab 注册的应用参数）
     gitlab:
       clientId: demo-client-id
       clientSecret: demo-client-secret
-      redirectUri: http://localhost:8880/jeecg-boot/sys/thirdLogin/gitlab/vertocallback
+      redirectUri: http://localhost:8880/jeecg-boot/sys/thirdLoginVerto/gitlab/vertocallback
       scope: read_user
       server: https://gitlab.com

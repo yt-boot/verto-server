@@ -14,7 +14,7 @@ import java.time.LocalDateTime;
 @Schema(description = "第三方OAuth令牌")
 public class OAuthToken implements Serializable {
     @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    private Long id;
 
     /** 平台，例如：gitlab、github */
     private String platform;

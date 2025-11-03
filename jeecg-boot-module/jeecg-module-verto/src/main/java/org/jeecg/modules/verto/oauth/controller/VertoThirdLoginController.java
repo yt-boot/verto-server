@@ -4,12 +4,16 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.jeecg.common.api.vo.Result;
 import org.jeecg.modules.verto.oauth.config.GitlabOAuthProperties;
 import org.jeecg.modules.verto.oauth.config.GitHubOAuthProperties;
 import org.jeecg.modules.verto.oauth.entity.OAuthToken;
 import org.jeecg.modules.verto.oauth.entity.OAuthUser;
 import org.jeecg.modules.verto.oauth.service.IOAuthService;
+import org.jeecg.common.constant.CommonConstant;
+import org.jeecg.modules.system.model.ThirdLoginModel;
+import org.jeecg.modules.system.service.ISysThirdAccountService;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -19,6 +23,8 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestTemplate;
+import org.apache.shiro.SecurityUtils;
+import org.jeecg.common.system.vo.LoginUser;
 
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
@@ -30,13 +36,15 @@ import java.util.UUID;
  * 对齐前端 /sys/thirdLogin/render/gitlab 和 /sys/thirdLogin/render/github 的调用
  */
 @RestController
-@RequestMapping("/sys/thirdLogin")
+@RequestMapping("/sys/thirdLoginVerto")
 @RequiredArgsConstructor
+@Slf4j
 public class VertoThirdLoginController {
 
     private final GitlabOAuthProperties gitlabProps;
     private final GitHubOAuthProperties githubProps;
     private final IOAuthService oauthService;
+    private final ISysThirdAccountService sysThirdAccountService;
     private final RestTemplate restTemplate = new RestTemplate();
 
     /**
@@ -45,6 +53,7 @@ public class VertoThirdLoginController {
     @GetMapping("/render/gitlab")
     public ResponseEntity<Void> gitlabAuthorize(@RequestParam(value = "return", required = false) String returnUrl,
                                                HttpServletResponse response) {
+        log.info("[Verto] Enter gitlabAuthorize, returnUrl={}", returnUrl);
         String clientId = gitlabProps.getClientId();
         String redirectUri = gitlabProps.getRedirectUri();
         String scope = gitlabProps.getScope();
@@ -65,6 +74,17 @@ public class VertoThirdLoginController {
             ret.setMaxAge(5 * 60);
             response.addCookie(ret);
         }
+        // 记录当前登录系统用户ID，便于回调时在会话不一致场景下仍可完成绑定
+        try {
+            LoginUser sysUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+            if (sysUser != null && StringUtils.hasText(sysUser.getId())) {
+                Cookie su = new Cookie("verto_system_user_id", sysUser.getId());
+                su.setHttpOnly(true);
+                su.setPath("/");
+                su.setMaxAge(5 * 60);
+                response.addCookie(su);
+            }
+        } catch (Exception ignore) {}
         String authorizeUrl = server + "/oauth/authorize"
                 + "?client_id=" + urlEnc(clientId)
                 + "&redirect_uri=" + urlEnc(redirectUri)
@@ -87,6 +107,7 @@ public class VertoThirdLoginController {
             @RequestParam(value = "error", required = false) String error,
             HttpServletRequest request,
             HttpServletResponse response) {
+        log.info("[Verto] Handling GitLab callback at /sys/thirdLoginVerto/gitlab/vertocallback, code={}, state={}, error={}", code, state, error);
         // Validate state
         String cookieState = null;
         if (request.getCookies() != null) {
@@ -132,6 +153,7 @@ public class VertoThirdLoginController {
         try {
             tokenResp = restTemplate.postForObject(tokenUrl, entity, Map.class);
         } catch (Exception ex) {
+            log.error("[Verto] GitLab token exchange failed: {}", ex.getMessage(), ex);
             String html = "<!DOCTYPE html>" +
                     "<html><head><meta charset=\"utf-8\"><title>GitLab Bind Failed</title></head>" +
                     "<body><script>if (window.opener) {window.opener.postMessage('登录失败', '*');} window.close();</script>" +
@@ -148,6 +170,7 @@ public class VertoThirdLoginController {
         String accessToken = (String) tokenResp.get("access_token");
         String tokenType = (String) tokenResp.getOrDefault("token_type", "Bearer");
         String scope = (String) tokenResp.getOrDefault("scope", "");
+        log.info("[Verto] GitLab token obtained: tokenType={}, scope={}", tokenType, scope);
 
         // Fetch user info
         HttpHeaders authHeaders = new HttpHeaders();
@@ -159,6 +182,7 @@ public class VertoThirdLoginController {
             userResp = restTemplate.exchange(gitlabProps.getServer() + "/api/v4/user",
                     org.springframework.http.HttpMethod.GET, userEntity, Map.class).getBody();
         } catch (Exception ex) {
+            log.error("[Verto] GitLab user info fetch failed: {}", ex.getMessage(), ex);
             String html = "<!DOCTYPE html>" +
                     "<html><head><meta charset=\"utf-8\"><title>GitLab Bind Failed</title></head>" +
                     "<body><script>if (window.opener) {window.opener.postMessage('登录失败', '*');} window.close();</script>" +
@@ -177,10 +201,51 @@ public class VertoThirdLoginController {
         String name = String.valueOf(userResp.getOrDefault("name", ""));
         String avatarUrl = String.valueOf(userResp.getOrDefault("avatar_url", ""));
         String email = String.valueOf(userResp.getOrDefault("email", ""));
+        log.info("[Verto] GitLab user fetched: id={}, login={}", oauthUserId, login);
 
-        // Persist
+        // Persist to Verto OAuth tables
         OAuthUser user = oauthService.upsertUser("gitlab", oauthUserId, login, name, avatarUrl, email);
         OAuthToken token = oauthService.saveToken("gitlab", oauthUserId, accessToken, tokenType, scope);
+        log.info("[Verto] GitLab OAuth persisted: userId={}, tokenType={}, scope={}", oauthUserId, tokenType, scope);
+
+        // 绑定到当前系统用户，并清理旧 token，保证“一对一”：每个系统用户仅保留一条当前 access_token
+        try {
+            LoginUser sysUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+            String systemUserId = sysUser != null ? sysUser.getId() : null;
+            // 如果会话中拿不到，尝试从前面授权时写入的短期cookie中获取
+            if (!StringUtils.hasText(systemUserId) && request.getCookies() != null) {
+                for (Cookie c : request.getCookies()) {
+                    if ("verto_system_user_id".equals(c.getName())) {
+                        systemUserId = c.getValue();
+                        break;
+                    }
+                }
+            }
+            if (StringUtils.hasText(systemUserId)) {
+                boolean bound = oauthService.bindUserAccount(systemUserId, "gitlab", oauthUserId);
+                log.info("[Verto] Bind gitlab account to systemUserId={}, result={}", systemUserId, bound);
+                // 清理该第三方用户的历史 token，仅保留最新一条
+                oauthService.cleanupTokensForOauthUser("gitlab", oauthUserId);
+                // 绑定成功后清理cookie，避免污染后续会话
+                Cookie su = new Cookie("verto_system_user_id", "");
+                su.setMaxAge(0);
+                su.setPath("/");
+                response.addCookie(su);
+            } else {
+                log.warn("[Verto] Cannot resolve systemUserId from session or cookie, skip binding & cleanup.");
+            }
+        } catch (Exception e) {
+            log.warn("[Verto] Binding/Cleanup after GitLab callback failed: {}", e.getMessage());
+        }
+
+        // Create compatibility record for System binding (/sys/thirdApp/bindThirdAppAccount)
+        try {
+            ThirdLoginModel tlm = new ThirdLoginModel("gitlab", oauthUserId, login, avatarUrl);
+            sysThirdAccountService.saveThirdUser(tlm, CommonConstant.TENANT_ID_DEFAULT_VALUE);
+            log.info("[Verto] SysThirdAccount created for gitlab: uuid={}, tenantId={}", oauthUserId, CommonConstant.TENANT_ID_DEFAULT_VALUE);
+        } catch (Exception e) {
+            log.warn("[Verto] Failed to create SysThirdAccount record for gitlab uuid {}: {}", oauthUserId, e.getMessage());
+        }
 
         // 返回与前端约定的消息格式："绑定手机号,{uuid}" 用于触发绑定
         String html = "<!DOCTYPE html>" +
@@ -203,6 +268,7 @@ public class VertoThirdLoginController {
     @GetMapping("/render/github")
     public ResponseEntity<Void> githubAuthorize(@RequestParam(value = "return", required = false) String returnUrl,
                                                 HttpServletResponse response) {
+        log.info("[Verto] Enter githubAuthorize, returnUrl={}", returnUrl);
         String clientId = githubProps.getClientId();
         String redirectUri = githubProps.getRedirectUri();
         String scope = githubProps.getScope();
@@ -222,6 +288,17 @@ public class VertoThirdLoginController {
             ret.setMaxAge(5 * 60);
             response.addCookie(ret);
         }
+        // 记录当前登录系统用户ID，便于回调时在会话不一致场景下仍可完成绑定
+        try {
+            LoginUser sysUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+            if (sysUser != null && StringUtils.hasText(sysUser.getId())) {
+                Cookie su = new Cookie("verto_system_user_id", sysUser.getId());
+                su.setHttpOnly(true);
+                su.setPath("/");
+                su.setMaxAge(5 * 60);
+                response.addCookie(su);
+            }
+        } catch (Exception ignore) {}
         String authorizeUrl = "https://github.com/login/oauth/authorize"
                 + "?client_id=" + urlEnc(clientId)
                 + "&redirect_uri=" + urlEnc(redirectUri)
@@ -243,6 +320,7 @@ public class VertoThirdLoginController {
             @RequestParam(value = "error", required = false) String error,
             HttpServletRequest request,
             HttpServletResponse response) {
+        log.info("[Verto] Handling GitHub callback at /sys/thirdLoginVerto/github/vertocallback, code={}, state={}, error={}", code, state, error);
         // Validate state
         String cookieState = null;
         if (request.getCookies() != null) {
@@ -289,6 +367,7 @@ public class VertoThirdLoginController {
         try {
             tokenResp = restTemplate.postForObject(tokenUrl, entity, Map.class);
         } catch (Exception ex) {
+            log.error("[Verto] GitHub token exchange failed: {}", ex.getMessage(), ex);
             String html = "<!DOCTYPE html>" +
                     "<html><head><meta charset=\"utf-8\"><title>GitHub Bind Failed</title></head>" +
                     "<body><script>if (window.opener) {window.opener.postMessage('登录失败', '*');} window.close();</script>" +
@@ -305,6 +384,7 @@ public class VertoThirdLoginController {
         String accessToken = (String) tokenResp.get("access_token");
         String tokenType = String.valueOf(tokenResp.getOrDefault("token_type", "Bearer"));
         String scope = String.valueOf(tokenResp.getOrDefault("scope", githubProps.getScope()));
+        log.info("[Verto] GitHub token obtained: tokenType={}, scope={}", tokenType, scope);
 
         // Fetch user info from GitHub
         HttpHeaders authHeaders = new HttpHeaders();
@@ -316,6 +396,7 @@ public class VertoThirdLoginController {
             userResp = restTemplate.exchange("https://api.github.com/user",
                     org.springframework.http.HttpMethod.GET, userEntity, Map.class).getBody();
         } catch (Exception ex) {
+            log.error("[Verto] GitHub user info fetch failed: {}", ex.getMessage(), ex);
             String html = "<!DOCTYPE html>" +
                     "<html><head><meta charset=\"utf-8\"><title>GitHub Bind Failed</title></head>" +
                     "<body><script>if (window.opener) {window.opener.postMessage('登录失败', '*');} window.close();</script>" +
@@ -334,10 +415,51 @@ public class VertoThirdLoginController {
         String name = String.valueOf(userResp.getOrDefault("name", ""));
         String avatarUrl = String.valueOf(userResp.getOrDefault("avatar_url", ""));
         String email = String.valueOf(userResp.getOrDefault("email", ""));
+        log.info("[Verto] GitHub user fetched: id={}, login={}", oauthUserId, login);
 
         // Persist via IOAuthService
         OAuthUser user = oauthService.upsertUser("github", oauthUserId, login, name, avatarUrl, email);
         OAuthToken token = oauthService.saveToken("github", oauthUserId, accessToken, tokenType, scope);
+        log.info("[Verto] GitHub OAuth persisted: userId={}, tokenType={}, scope={}", oauthUserId, tokenType, scope);
+
+        // 绑定到当前系统用户，并清理旧 token，保证“一对一”：每个系统用户仅保留一条当前 access_token
+        try {
+            LoginUser sysUser = (LoginUser) SecurityUtils.getSubject().getPrincipal();
+            String systemUserId = sysUser != null ? sysUser.getId() : null;
+            // 如果会话中拿不到，尝试从前面授权时写入的短期cookie中获取
+            if (!StringUtils.hasText(systemUserId) && request.getCookies() != null) {
+                for (Cookie c : request.getCookies()) {
+                    if ("verto_system_user_id".equals(c.getName())) {
+                        systemUserId = c.getValue();
+                        break;
+                    }
+                }
+            }
+            if (StringUtils.hasText(systemUserId)) {
+                boolean bound = oauthService.bindUserAccount(systemUserId, "github", oauthUserId);
+                log.info("[Verto] Bind github account to systemUserId={}, result={}", systemUserId, bound);
+                // 清理该第三方用户的历史 token，仅保留最新一条
+                oauthService.cleanupTokensForOauthUser("github", oauthUserId);
+                // 绑定成功后清理cookie，避免污染后续会话
+                Cookie su = new Cookie("verto_system_user_id", "");
+                su.setMaxAge(0);
+                su.setPath("/");
+                response.addCookie(su);
+            } else {
+                log.warn("[Verto] Cannot resolve systemUserId from session or cookie, skip binding & cleanup.");
+            }
+        } catch (Exception e) {
+            log.warn("[Verto] Binding/Cleanup after GitHub callback failed: {}", e.getMessage());
+        }
+
+        // Create compatibility record for System binding (/sys/thirdApp/bindThirdAppAccount)
+        try {
+            ThirdLoginModel tlm = new ThirdLoginModel("github", oauthUserId, login, avatarUrl);
+            sysThirdAccountService.saveThirdUser(tlm, CommonConstant.TENANT_ID_DEFAULT_VALUE);
+            log.info("[Verto] SysThirdAccount created for github: uuid={}, tenantId={}", oauthUserId, CommonConstant.TENANT_ID_DEFAULT_VALUE);
+        } catch (Exception e) {
+            log.warn("[Verto] Failed to create SysThirdAccount record for github uuid {}: {}", oauthUserId, e.getMessage());
+        }
 
         String html = "<!DOCTYPE html>" +
                 "<html><head><meta charset=\"utf-8\"><title>GitHub Bind Success</title></head>" +
@@ -368,6 +490,7 @@ public class VertoThirdLoginController {
     @GetMapping("/render/GITHUB")
     public ResponseEntity<Void> githubAuthorizeUpper(@RequestParam(value = "return", required = false) String returnUrl,
                                                      HttpServletResponse response) {
+        log.info("[Verto] Enter githubAuthorizeUpper, returnUrl={}", returnUrl);
         return githubAuthorize(returnUrl, response);
     }
 
@@ -380,6 +503,7 @@ public class VertoThirdLoginController {
                                                       @RequestParam(value = "error", required = false) String error,
                                                       HttpServletRequest request,
                                                       HttpServletResponse response) {
+        log.info("[Verto] Handling GitHub callback (upper alias) at /sys/thirdLoginVerto/GITHUB/vertocallback, code={}, state={}, error={}", code, state, error);
         return githubCallback(code, state, error, request, response);
     }
 
@@ -389,6 +513,7 @@ public class VertoThirdLoginController {
     @GetMapping("/render/GITLAB")
     public ResponseEntity<Void> gitlabAuthorizeUpper(@RequestParam(value = "return", required = false) String returnUrl,
                                                      HttpServletResponse response) {
+        log.info("[Verto] Enter gitlabAuthorizeUpper, returnUrl={}", returnUrl);
         return gitlabAuthorize(returnUrl, response);
     }
 
@@ -401,6 +526,7 @@ public class VertoThirdLoginController {
                                                       @RequestParam(value = "error", required = false) String error,
                                                       HttpServletRequest request,
                                                       HttpServletResponse response) {
+        log.info("[Verto] Handling GitLab callback (upper alias) at /sys/thirdLogin/GITLAB/vertocallback, code={}, state={}, error={}", code, state, error);
         return gitlabCallback(code, state, error, request, response);
     }
 

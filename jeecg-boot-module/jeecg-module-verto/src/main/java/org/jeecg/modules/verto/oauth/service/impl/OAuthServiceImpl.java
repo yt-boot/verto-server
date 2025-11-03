@@ -138,7 +138,7 @@ public class OAuthServiceImpl implements IOAuthService {
         OAuthUser user = userMapper.selectOne(new QueryWrapper<OAuthUser>()
                 .eq("platform", platform)
                 .eq("oauth_user_id", binding.getOauthUserId()));
-        if (user != null && StringUtils.hasText(user.getLastTokenId())) {
+        if (user != null && user.getLastTokenId() != null) {
             OAuthToken token = tokenMapper.selectById(user.getLastTokenId());
             if (token != null) return token.getAccessToken();
         }
@@ -179,5 +179,55 @@ public class OAuthServiceImpl implements IOAuthService {
             e.printStackTrace();
         }
         return result;
+    }
+
+    @Override
+    public boolean deleteAccessTokensBySystemUser(String systemUserId, String platform) {
+        try {
+            OAuthBinding binding = bindingMapper.selectOne(new QueryWrapper<OAuthBinding>()
+                    .eq("system_user_id", systemUserId)
+                    .eq("platform", platform));
+            if (binding == null || !StringUtils.hasText(binding.getOauthUserId())) {
+                return false;
+            }
+            int deleted = tokenMapper.delete(new QueryWrapper<OAuthToken>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", binding.getOauthUserId()));
+            OAuthUser oauthUser = userMapper.selectOne(new QueryWrapper<OAuthUser>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", binding.getOauthUserId()));
+            if (oauthUser != null) {
+                oauthUser.setLastTokenId(null);
+                userMapper.updateById(oauthUser);
+            }
+            return deleted > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public void cleanupTokensForOauthUser(String platform, String oauthUserId) {
+        try {
+            java.util.List<OAuthToken> tokens = tokenMapper.selectList(new QueryWrapper<OAuthToken>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", oauthUserId)
+                    .orderByDesc("created_at"));
+            if (tokens == null || tokens.isEmpty()) return;
+            OAuthToken newest = tokens.get(0);
+            for (int i = 1; i < tokens.size(); i++) {
+                tokenMapper.deleteById(tokens.get(i).getId());
+            }
+            OAuthUser oauthUser = userMapper.selectOne(new QueryWrapper<OAuthUser>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", oauthUserId));
+            if (oauthUser != null) {
+                oauthUser.setLastTokenId(newest.getId());
+                userMapper.updateById(oauthUser);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }

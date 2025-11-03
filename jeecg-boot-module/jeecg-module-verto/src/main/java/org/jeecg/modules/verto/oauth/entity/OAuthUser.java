@@ -16,7 +16,7 @@ import java.time.LocalDateTime;
 public class OAuthUser implements Serializable {
 
     @TableId(type = IdType.ASSIGN_ID)
-    private String id;
+    private Long id;
 
     /** 平台，例如：gitlab、github */
     private String platform;
@@ -45,5 +45,5 @@ public class OAuthUser implements Serializable {
 
     /** 最近一次绑定的 tokenId（可选，如果你希望建立关联） */
     @TableField(exist = true)
-    private String lastTokenId;
+    private Long lastTokenId;
 }

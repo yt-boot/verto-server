@@ -161,7 +161,7 @@ public class OAuthServiceDbImpl implements IOAuthService {
         log.debug("getAccessTokenForSystemUser: oauth user -> id={}, login={}, lastTokenId={}",
                 user.getId(), user.getLogin(), user.getLastTokenId());
         OAuthToken token = null;
-        if (!StringUtils.hasText(user.getLastTokenId())) {
+        if (user.getLastTokenId() == null) {
             log.warn("getAccessTokenForSystemUser: lastTokenId is empty for oauthUserId={} (platform={}). Trying fallback to latest token...", binding.getOauthUserId(), platform);
         } else {
             token = tokenMapper.selectById(user.getLastTokenId());
@@ -236,5 +236,68 @@ public class OAuthServiceDbImpl implements IOAuthService {
             e.printStackTrace();
         }
         return result;
+    }
+
+    @Override
+    public boolean deleteAccessTokensBySystemUser(String systemUserId, String platform) {
+        try {
+            OAuthBinding binding = bindingMapper.selectOne(
+                    new QueryWrapper<OAuthBinding>()
+                            .eq("system_user_id", systemUserId)
+                            .eq("platform", platform)
+            );
+            if (binding == null || !StringUtils.hasText(binding.getOauthUserId())) {
+                return false;
+            }
+            // 删除该第三方用户在该平台下的所有 token
+            int deleted = tokenMapper.delete(new QueryWrapper<OAuthToken>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", binding.getOauthUserId())
+            );
+            // 同步 OAuthUser.lastTokenId 置空
+            OAuthUser oauthUser = userMapper.selectOne(new QueryWrapper<OAuthUser>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", binding.getOauthUserId())
+            );
+            if (oauthUser != null) {
+                oauthUser.setLastTokenId(null);
+                userMapper.updateById(oauthUser);
+            }
+            return deleted > 0;
+        } catch (Exception e) {
+            log.error("deleteAccessTokensBySystemUser error: systemUserId={}, platform={}, msg={}", systemUserId, platform, e.getMessage(), e);
+            return false;
+        }
+    }
+
+    @Override
+    public void cleanupTokensForOauthUser(String platform, String oauthUserId) {
+        try {
+            // 找到最新的 token（按 created_at 降序）
+            java.util.List<OAuthToken> tokens = tokenMapper.selectList(new QueryWrapper<OAuthToken>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", oauthUserId)
+                    .orderByDesc("created_at")
+            );
+            if (tokens == null || tokens.isEmpty()) {
+                return;
+            }
+            OAuthToken newest = tokens.get(0);
+            // 删除其余旧 token
+            for (int i = 1; i < tokens.size(); i++) {
+                tokenMapper.deleteById(tokens.get(i).getId());
+            }
+            // 同步 OAuthUser.lastTokenId 指向最新 token
+            OAuthUser oauthUser = userMapper.selectOne(new QueryWrapper<OAuthUser>()
+                    .eq("platform", platform)
+                    .eq("oauth_user_id", oauthUserId)
+            );
+            if (oauthUser != null) {
+                oauthUser.setLastTokenId(newest.getId());
+                userMapper.updateById(oauthUser);
+            }
+        } catch (Exception e) {
+            log.error("cleanupTokensForOauthUser error: platform={}, oauthUserId={}, msg={}", platform, oauthUserId, e.getMessage(), e);
+        }
     }
 }
