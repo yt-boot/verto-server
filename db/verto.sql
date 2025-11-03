@@ -275,6 +275,21 @@ CREATE TABLE `oauth_user` (
 -- --------------------------------------------------------
 
 --
+-- 表的结构 `oauth_binding`
+--
+
+CREATE TABLE `oauth_binding` (
+  `id` bigint NOT NULL COMMENT '主键ID（雪花算法生成）',
+  `system_user_id` varchar(64) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '系统用户ID',
+  `platform` varchar(32) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '平台标识（如：github、gitlab）',
+  `oauth_user_id` varchar(128) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '第三方用户唯一ID',
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '绑定时间',
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='系统用户与第三方OAuth用户绑定关系表';
+
+-- --------------------------------------------------------
+
+--
 -- 表的结构 `project`
 --
 
@@ -510,6 +525,14 @@ ALTER TABLE `oauth_user`
   ADD KEY `fk_oauth_user_last_token` (`last_token_id`);
 
 --
+-- 表的索引 `oauth_binding`
+--
+ALTER TABLE `oauth_binding`
+  ADD PRIMARY KEY (`id`),
+  ADD UNIQUE KEY `uk_user_platform` (`system_user_id`,`platform`),
+  ADD KEY `idx_platform_oauth_user` (`platform`,`oauth_user_id`);
+
+--
 -- 表的索引 `project`
 --
 ALTER TABLE `project`
@@ -572,6 +595,12 @@ ALTER TABLE `app_config_relation`
 --
 ALTER TABLE `oauth_user`
   ADD CONSTRAINT `fk_oauth_user_last_token` FOREIGN KEY (`last_token_id`) REFERENCES `oauth_token` (`id`) ON DELETE SET NULL ON UPDATE RESTRICT;
+
+--
+-- 限制表 `oauth_binding`
+--
+ALTER TABLE `oauth_binding`
+  ADD CONSTRAINT `fk_binding_oauth_user` FOREIGN KEY (`platform`, `oauth_user_id`) REFERENCES `oauth_user` (`platform`, `oauth_user_id`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
