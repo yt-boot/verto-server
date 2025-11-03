@@ -83,4 +83,42 @@ public class AppManageController {
         AppManage app = appManageService.getById(id);
         return app == null ? Result.error("未找到对应数据") : Result.OK(app);
     }
+
+    // ==================== Git 相关 ====================
+
+    @Operation(summary = "同步应用的 Git 仓库信息（占位实现：返回持久化的 gitUrl）")
+    @PostMapping("/git/sync")
+    public Result<Map<String, Object>> syncGitRepoInfo(@RequestParam(name = "appId") String appId) {
+        AppManage app = appManageService.getById(appId);
+        if (app == null) {
+            return Result.error("未找到应用信息");
+        }
+        if (org.apache.commons.lang3.StringUtils.isBlank(app.getGitUrl())) {
+            return Result.error("应用未配置 Git 仓库地址");
+        }
+        // 这里可拓展为：调用项目模块的 Git 服务，拉取并更新更多仓库信息
+        Map<String, Object> info = new HashMap<>();
+        info.put("appId", appId);
+        info.put("repoUrl", app.getGitUrl());
+        return Result.OK(info);
+    }
+
+    @Operation(summary = "同步应用的 Git 仓库信息（GET 兼容调用）")
+    @GetMapping("/git/sync")
+    public Result<Map<String, Object>> syncGitRepoInfoGet(@RequestParam(name = "appId") String appId) {
+        return syncGitRepoInfo(appId);
+    }
+
+    @Operation(summary = "获取应用的 Git 仓库信息（占位实现：返回持久化的 gitUrl）")
+    @GetMapping("/git/info")
+    public Result<Map<String, Object>> getGitRepoInfo(@RequestParam(name = "appId") String appId) {
+        AppManage app = appManageService.getById(appId);
+        if (app == null) {
+            return Result.error("未找到应用信息");
+        }
+        Map<String, Object> info = new HashMap<>();
+        info.put("appId", appId);
+        info.put("repoUrl", org.apache.commons.lang3.StringUtils.defaultString(app.getGitUrl(), ""));
+        return Result.OK(info);
+    }
 }
