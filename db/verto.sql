@@ -123,6 +123,7 @@ CREATE TABLE `app_manage` (
   `git_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Git仓库地址',
   `domain` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '应用领域',
   `managers` text COLLATE utf8mb4_unicode_ci COMMENT '管理员列表(JSON数组)',
+  `extra_info` longtext COLLATE utf8mb4_unicode_ci COMMENT '应用附加信息(JSON：技术栈、备注等)',
   `status` tinyint(1) DEFAULT '1' COMMENT '状态(0:禁用,1:启用)',
   `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

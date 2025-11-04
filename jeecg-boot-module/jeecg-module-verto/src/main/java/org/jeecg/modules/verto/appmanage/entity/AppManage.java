@@ -31,6 +31,8 @@ public class AppManage implements Serializable {
     private String domain;
     /** 管理员ID列表，建议存 JSON 或逗号分隔 */
     private String managers;
+    /** 附加信息(JSON：技术栈、备注等) */
+    private String extraInfo;
     /** 状态：1-启用，0-停用 */
     private Integer status;
 
