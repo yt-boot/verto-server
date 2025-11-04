@@ -1,4 +1,4 @@
-﻿/jeecgboot/appmanage/app/delete
+/jeecgboot/appmanage/app/delete
 /jeecgboot/appmanage/app/deleteBatch
 /jeecgboot/appmanage/app/edit
 /jeecgboot/appmanage/app/list
@@ -99,3 +99,39 @@
 /jeecgboot/staff/points/logs
 /jeecgboot/staff/points/summary
 /jeecgboot/staff/queryById
+# Verto Backend (new)
+/jeecgboot/verto/application/list
+/jeecgboot/verto/application/create
+/jeecgboot/verto/application/{id}
+/jeecgboot/verto/application/{id}
+/jeecgboot/verto/application/{id}
+/jeecgboot/verto/application/{id}/bindTemplate
+/jeecgboot/verto/application/{id}/unbindTemplate
+/jeecgboot/verto/pipeline/list
+/jeecgboot/verto/pipeline/create
+/jeecgboot/verto/pipeline/run
+/jeecgboot/verto/pipeline/history
+/jeecgboot/verto/pipeline/build/detail
+/jeecgboot/verto/pipeline/build/logs
+/jeecgboot/verto/staff/list
+/jeecgboot/verto/staff/{id}
+/jeecgboot/verto/staff/points/logs
+/jeecgboot/verto/staff/points/adjust
+# Compatibility alias for existing mocks
+/verto-backend/application/list
+/verto-backend/application/create
+/verto-backend/application/{id}
+/verto-backend/application/{id}
+/verto-backend/application/{id}
+/verto-backend/application/{id}/bindTemplate
+/verto-backend/application/{id}/unbindTemplate
+/verto-backend/pipeline/list
+/verto-backend/pipeline/create
+/verto-backend/pipeline/run
+/verto-backend/pipeline/history
+/verto-backend/pipeline/build/detail
+/verto-backend/pipeline/build/logs
+/verto-backend/staff/list
+/verto-backend/staff/{id}
+/verto-backend/staff/points/logs
+/verto-backend/staff/points/adjust
