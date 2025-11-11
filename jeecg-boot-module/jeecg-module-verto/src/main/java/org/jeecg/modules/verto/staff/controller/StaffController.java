@@ -8,28 +8,29 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.jeecg.common.api.vo.Result;
+import org.jeecg.common.system.base.controller.JeecgController;
 import org.jeecg.modules.verto.staff.entity.Staff;
-import org.jeecg.modules.verto.staff.service.IStaffPointsLogService;
 import org.jeecg.modules.verto.staff.service.IStaffService;
 import org.springframework.web.bind.annotation.*;
 
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.*;
 
 @Tag(name = "人员管理")
 @RestController
-@RequestMapping("/staff")
+@RequestMapping("/verto/staff")
 @RequiredArgsConstructor
-public class StaffController {
+public class StaffController extends JeecgController<Staff, IStaffService> {
 
     private final IStaffService staffService;
-    private final IStaffPointsLogService staffPointsLogService;
 
     @Operation(summary = "分页列表查询")
     @GetMapping("/list")
     public Result<IPage<Staff>> queryPageList(Staff staff,
                                               @RequestParam(name = "pageNo", defaultValue = "1") Integer pageNo,
                                               @RequestParam(name = "pageSize", defaultValue = "10") Integer pageSize) {
-        LambdaQueryWrapper<Staff> query = new LambdaQueryWrapper<Staff>();
+        LambdaQueryWrapper<Staff> query = new LambdaQueryWrapper<>();
         if (StringUtils.isNotBlank(staff.getName())) {
             query.like(Staff::getName, staff.getName());
         }
@@ -43,19 +44,7 @@ public class StaffController {
             query.eq(Staff::getStatus, staff.getStatus());
         }
         query.orderByDesc(Staff::getCreateTime);
-        Page<Staff> page = new Page<>(pageNo, pageSize);
-        IPage<Staff> pageList = staffService.page(page, query);
-
-        // 聚合积分
-        List<String> staffIds = new ArrayList<>();
-        for (Staff s : pageList.getRecords()) {
-            staffIds.add(s.getId());
-        }
-        Map<String, Integer> pointsMap = staffPointsLogService.getTotalPointsByStaffIds(staffIds);
-        for (Staff s : pageList.getRecords()) {
-            s.setPoints(pointsMap.getOrDefault(s.getId(), 0));
-        }
-
+        IPage<Staff> pageList = staffService.page(new Page<>(pageNo, pageSize), query);
         return Result.OK(pageList);
     }
 
@@ -69,7 +58,7 @@ public class StaffController {
     }
 
     @Operation(summary = "编辑")
-    @PutMapping("/edit")
+    @RequestMapping(value = "/edit", method = {RequestMethod.PUT, RequestMethod.POST})
     public Result<String> edit(@RequestBody Staff staff) {
         staff.setUpdateTime(new Date());
         boolean ok = staffService.updateById(staff);
@@ -98,12 +87,7 @@ public class StaffController {
     @GetMapping("/queryById")
     public Result<Staff> queryById(@RequestParam(name = "id") String id) {
         Staff staff = staffService.getById(id);
-        if (staff == null) {
-            return Result.error("未找到对应数据");
-        }
-        Integer points = staffPointsLogService.getTotalPointsByStaffId(id);
-        staff.setPoints(points);
-        return Result.OK(staff);
+        return staff == null ? Result.error("未找到对应数据") : Result.OK(staff);
     }
 
     @Operation(summary = "获取在职人员列表")
@@ -113,5 +97,12 @@ public class StaffController {
                 .eq(Staff::getStatus, 1)
                 .orderByAsc(Staff::getName));
         return Result.OK(list);
+    }
+
+    @Operation(summary = "通过Excel导入人员数据")
+    @PostMapping("/importExcel")
+    public Result<?> importExcel(HttpServletRequest request, HttpServletResponse response) {
+        // 复用 JeecgController 的通用导入实现
+        return super.importExcel(request, response, Staff.class);
     }
 }

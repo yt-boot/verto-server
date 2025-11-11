@@ -23,6 +23,7 @@
             <artifactId>jeecg-system-biz</artifactId>
             <version>${jeecgboot.version}</version>
         </dependency>
+        <!-- 无需显式引入 autopoi-web，统一跟随 jeecg-boot-base-core 的传递依赖 -->
     </dependencies>
 </project>
 
