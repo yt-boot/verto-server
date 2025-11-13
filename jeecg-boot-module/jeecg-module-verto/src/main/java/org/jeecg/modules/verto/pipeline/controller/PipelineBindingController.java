@@ -1,4 +1,4 @@
-package org.jeecg.modules.verto.appmanage.pipeline.controller;
+package org.jeecg.modules.verto.pipeline.controller;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
@@ -6,31 +6,29 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.jeecg.common.api.vo.Result;
-import org.jeecg.modules.verto.appmanage.pipeline.entity.VertoAppPipelineBinding;
-import org.jeecg.modules.verto.appmanage.pipeline.service.IVertoAppPipelineBindingService;
+import org.jeecg.modules.verto.pipeline.entity.VertoPipeline;
+import org.jeecg.modules.verto.pipeline.service.IVertoPipelineService;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
 @Tag(name = "应用流水线绑定")
 @RestController
-@RequestMapping("/verto/appmanage/pipeline/binding")
+@RequestMapping("/verto/pipeline/binding")
 @RequiredArgsConstructor
 public class PipelineBindingController {
 
-    private final IVertoAppPipelineBindingService bindingService;
+    private final IVertoPipelineService bindingService;
 
     @Operation(summary = "绑定列表")
     @GetMapping("/list")
     public Result<Map<String, Object>> list(@RequestParam("appId") String appId,
                                             @RequestParam(value = "environment", required = false) String environment) {
-        LambdaQueryWrapper<VertoAppPipelineBinding> query = new LambdaQueryWrapper<>();
-        query.eq(VertoAppPipelineBinding::getAppId, appId);
-        if (StringUtils.isNotBlank(environment)) {
-            query.eq(VertoAppPipelineBinding::getEnvironment, environment);
-        }
-        query.orderByDesc(VertoAppPipelineBinding::getCreateTime);
-        List<VertoAppPipelineBinding> list = bindingService.list(query);
+        LambdaQueryWrapper<VertoPipeline> query = new LambdaQueryWrapper<>();
+        query.eq(VertoPipeline::getApplicationId, appId);
+        // 由于新表结构没有environment字段，此参数可能需要调整
+        query.orderByDesc(VertoPipeline::getCreateTime);
+        List<VertoPipeline> list = bindingService.list(query);
         Map<String, Object> payload = new HashMap<>();
         payload.put("records", list);
         payload.put("total", list.size());
@@ -39,11 +37,12 @@ public class PipelineBindingController {
 
     @Operation(summary = "保存绑定（新增或编辑）")
     @PostMapping("/save")
-    public Result<String> save(@RequestBody VertoAppPipelineBinding binding) {
+    public Result<String> save(@RequestBody VertoPipeline binding) {
         Date now = new Date();
         if (StringUtils.isBlank(binding.getStatus())) {
             binding.setStatus("enabled");
         }
+        // 确保jobUrl字段可以正确处理，允许为空
         if (StringUtils.isBlank(binding.getId())) {
             // 新增
             binding.setCreateTime(now);
@@ -67,28 +66,28 @@ public class PipelineBindingController {
 
     @Operation(summary = "绑定详情")
     @GetMapping("/detail")
-    public Result<VertoAppPipelineBinding> detail(@RequestParam("id") String id) {
-        VertoAppPipelineBinding binding = bindingService.getById(id);
+    public Result<VertoPipeline> detail(@RequestParam("id") String id) {
+        VertoPipeline binding = bindingService.getById(id);
         return binding == null ? Result.error("未找到对应数据") : Result.OK(binding);
     }
 
-    @Operation(summary = "校验任务名称是否可用")
+    @Operation(summary = "校验流水线名称是否可用")
     @PostMapping("/validate")
     public Result<Map<String, Object>> validate(@RequestBody(required = false) Map<String, String> body,
-                                                @RequestParam(value = "jobName", required = false) String jobName) {
-        String name = jobName;
+                                                @RequestParam(value = "pipelineName", required = false) String pipelineName) {
+        String name = pipelineName;
         if (StringUtils.isBlank(name) && body != null) {
-            name = body.get("jobName");
+            name = body.get("pipelineName");
         }
         if (StringUtils.isBlank(name)) {
-            return Result.error("参数不合法：jobName 不能为空");
+            return Result.error("参数不合法：pipelineName 不能为空");
         }
-        LambdaQueryWrapper<VertoAppPipelineBinding> query = new LambdaQueryWrapper<>();
-        query.eq(VertoAppPipelineBinding::getJobName, name);
+        LambdaQueryWrapper<VertoPipeline> query = new LambdaQueryWrapper<>();
+        query.eq(VertoPipeline::getPipelineName, name);
         boolean exists = bindingService.count(query) > 0;
         Map<String, Object> payload = new HashMap<>();
         payload.put("valid", !exists);
-        payload.put("message", exists ? "任务名称已存在" : "可用");
+        payload.put("message", exists ? "流水线名称已存在" : "可用");
         return Result.OK(payload);
     }
 }

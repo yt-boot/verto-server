@@ -78,6 +78,8 @@ CREATE TABLE IF NOT EXISTS `verto_pipeline` (
   `pipeline_name` varchar(100) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '流水线名称',
   `pipeline_type` varchar(20) COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '流水线类型(build:构建,deploy:部署,test:测试)',
   `status` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'enabled' COMMENT '状态(enabled/disabled)',
+  `job_url` varchar(255) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '流水线URL地址',
+  `description` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '备注描述',
   `config` text COLLATE utf8mb4_unicode_ci COMMENT '流水线配置(JSON)',
   `create_by` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '创建人',
   `create_time` datetime DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',

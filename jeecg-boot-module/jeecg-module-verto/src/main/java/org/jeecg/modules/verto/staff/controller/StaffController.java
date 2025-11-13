@@ -92,11 +92,16 @@ public class StaffController extends JeecgController<Staff, IStaffService> {
 
     @Operation(summary = "获取在职人员列表")
     @GetMapping("/active")
-    public Result<List<Staff>> active() {
+    public Result<IPage<Staff>> active() {
         List<Staff> list = staffService.list(new LambdaQueryWrapper<Staff>()
                 .eq(Staff::getStatus, 1)
                 .orderByAsc(Staff::getName));
-        return Result.OK(list);
+        // 创建Page对象并设置数据
+        Page<Staff> page = new Page<>();
+        page.setRecords(list);
+        page.setTotal(list.size());
+        // 保持与分页列表查询接口返回格式一致
+        return Result.OK(page);
     }
 
     @Operation(summary = "通过Excel导入人员数据")
