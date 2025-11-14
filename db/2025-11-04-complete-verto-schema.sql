@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `verto_application` (
   `app_description` text COLLATE utf8mb4_unicode_ci COMMENT '应用描述',
   `git_url` varchar(500) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT 'Git仓库地址',
   `domain` varchar(50) COLLATE utf8mb4_unicode_ci DEFAULT NULL COMMENT '应用领域',
+  `app_level` varchar(20) COLLATE utf8mb4_unicode_ci DEFAULT 'other' COMMENT '应用等级(level1:一级应用,level2:二级应用,level3:三级应用,other:其他)',
   `managers` text COLLATE utf8mb4_unicode_ci COMMENT '管理员列表(JSON数组，已由关系表替代)',
   `extra_info` longtext COLLATE utf8mb4_unicode_ci COMMENT '应用附加信息(JSON：技术栈、备注等)',
   `status` tinyint(1) DEFAULT '1' COMMENT '状态(0:禁用,1:启用)',
@@ -51,7 +52,8 @@ CREATE TABLE IF NOT EXISTS `verto_application` (
   `update_time` datetime DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
   PRIMARY KEY (`id`),
   KEY `idx_domain` (`domain`),
-  KEY `idx_status` (`status`)
+  KEY `idx_status` (`status`),
+  KEY `idx_app_level` (`app_level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='应用管理表';
 
 -- 应用-管理员关系（多对多）：verto_application_staff_manager

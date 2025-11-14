@@ -37,6 +37,9 @@ public class AppManageController {
         if (StringUtils.isNotBlank(app.getDomain())) {
             query.like(VertoApplication::getDomain, app.getDomain());
         }
+        if (StringUtils.isNotBlank(app.getAppLevel())) {
+            query.eq(VertoApplication::getAppLevel, app.getAppLevel());
+        }
         if (app.getStatus() != null) {
             query.eq(VertoApplication::getStatus, app.getStatus());
         }
@@ -48,6 +51,10 @@ public class AppManageController {
     @Operation(summary = "新增")
     @PostMapping("/add")
     public Result<String> add(@RequestBody VertoApplication app) {
+        // 设置默认应用等级为'other'
+        if (StringUtils.isBlank(app.getAppLevel())) {
+            app.setAppLevel("other");
+        }
         app.setCreateTime(new Date());
         app.setUpdateTime(new Date());
         boolean ok = applicationService.save(app);
@@ -57,6 +64,10 @@ public class AppManageController {
     @Operation(summary = "编辑")
     @PutMapping("/edit")
     public Result<String> edit(@RequestBody VertoApplication app) {
+        // 设置默认应用等级为'other'
+        if (StringUtils.isBlank(app.getAppLevel())) {
+            app.setAppLevel("other");
+        }
         app.setUpdateTime(new Date());
         boolean ok = applicationService.updateById(app);
         return ok ? Result.OK("编辑成功！") : Result.error("编辑失败或记录不存在");

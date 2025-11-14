@@ -28,6 +28,8 @@ public class VertoApplication {
     private String gitUrl;
     /** 应用领域 -> domain */
     private String domain;
+    /** 应用等级 -> app_level */
+    private String appLevel;
     /** 状态(0/1) -> status */
     private Integer status;
     /** 额外信息(JSON) -> extra_info */
